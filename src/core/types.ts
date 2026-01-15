@@ -1,5 +1,3 @@
-import * as THREE from 'three';
-
 export interface GravityVector {
   x: number;
   y: number; // Usually 0 in our logic, or -9.8 if doing full 3D

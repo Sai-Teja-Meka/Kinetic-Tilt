@@ -19,7 +19,7 @@ export class CollisionDetector {
    */
   public checkGoalEntry(
     heroPos: THREE.Vector3, 
-    heroRadius: number, 
+    _heroRadius: number, 
     goalPos: THREE.Vector3, 
     goalRadius: number,
     threshold: number = 0.8 
