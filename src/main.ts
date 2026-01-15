@@ -1,4 +1,6 @@
 import Matter from 'matter-js'; 
+import './main.css';
+
 import { GravityController } from './core/GravityController';
 import { DeviceInputManager } from './core/DeviceInputManager';
 import { DebugScene } from './scenes/DebugScene';
@@ -8,53 +10,56 @@ import { CollisionDetector } from './core/CollisionDetector';
 import { GoalSystem } from './core/GoalSystem';
 import { GameStateManager, GameState } from './core/GameStateManager';
 import { GameUI } from './ui/GameUI';
-import './main.css';
+import { SoundManager } from './audio/SoundManager';
+import { ScreenShake } from './effects/ScreenShake';
 
-// --- INITIALIZATION ---
+console.log("🚀 Booting Kinetic Tilt v1.0");
+
+// 1. Core Systems
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 if (!canvas) throw new Error("Canvas element not found");
-
-console.log("🚀 Initializing Kinetic Tilt Systems...");
 
 const gravityController = new GravityController();
 const inputManager = new DeviceInputManager((beta, gamma) => {
   gravityController.update(beta, gamma);
 });
 
+// Fix: Log manager state to silence unused variable warning
+console.log('Input Manager Online:', inputManager.state);
+
+// 2. Visuals & Physics
 const debugScene = new DebugScene(canvas, gravityController);
 const physicsWorld = new PhysicsWorld();
-
 physicsWorld.addHeroSphere(debugScene.getHeroSphere());
 physicsWorld.addBoundaries();
 
+// 3. Effects & Audio
 const particleSystem = new ParticleSystem(debugScene.getScene());
+const soundManager = new SoundManager();
+const screenShake = new ScreenShake(debugScene.getCamera());
 
+// 4. Gameplay Logic
 const collisionDetector = new CollisionDetector();
 const goalSystem = new GoalSystem(debugScene.getScene(), collisionDetector);
 const gameState = new GameStateManager();
 const gameUI = new GameUI();
 
-// --- UI CALLBACK WIRING ---
+// --- WIRING ---
 
 gameUI.setStartCallback(() => {
-  console.log('🎮 User clicked START');
+  soundManager.ensureContextResumed(); // Critical for Audio
   gameState.startGame();
   gameUI.showGameHUD();
 });
 
-// FIX 1: Update Restart Callback
 gameUI.setRestartCallback(() => {
-  console.log('🔄 User clicked RESTART');
-  
-  // 1. Reset Game Logic (Score, Time, State -> READY)
+  // Logic Reset
   gameState.reset();
+  gravityController.reset();
+  goalSystem.reset(debugScene.getScene());
+  particleSystem.reset();
   
-  // 2. Reset Visual Position
-  const heroSphere = debugScene.getHeroSphere();
-  heroSphere.position.set(0, 0.5, 0);
-  heroSphere.rotation.set(0, 0, 0);
-  
-  // 3. Reset Physics Body (Critical to stop momentum)
+  // Physics Reset
   const heroBody = physicsWorld.getHeroBody();
   if (heroBody) {
     Matter.Body.setPosition(heroBody, { x: 0, y: 0 }); 
@@ -62,23 +67,22 @@ gameUI.setRestartCallback(() => {
     Matter.Body.setAngularVelocity(heroBody, 0);
   }
   
-  // 4. Reset Input Vector
-  gravityController.reset();
-
-  // 5. Reset Goals (Fixes ghost goals)
-  goalSystem.reset(debugScene.getScene());
-
-  // 6. Reset Particles (Fixes visual clutter)
-  particleSystem.reset();
+  // Visual Reset
+  debugScene.getHeroSphere().position.set(0, 0.5, 0);
   
-  // 7. Return to Start Screen (Do not auto-start)
   gameUI.showStartScreen();
 });
 
-// State Change Listener
+gameUI.setMuteCallback(() => {
+  soundManager.toggleMute();
+  return soundManager.isSoundMuted();
+});
+
+// State Changes -> Audio/UI
 gameState.setStateChangeCallback((newState: GameState) => {
   switch (newState) {
     case GameState.WIN:
+      soundManager.playWin();
       gameUI.showWinScreen(
         gameState.getScore(),
         gameState.getTimeRemaining()
@@ -86,6 +90,7 @@ gameState.setStateChangeCallback((newState: GameState) => {
       break;
       
     case GameState.GAME_OVER:
+      soundManager.playLose();
       const progress = gameState.getProgress();
       gameUI.showGameOverScreen(
         gameState.getScore(),
@@ -96,41 +101,12 @@ gameState.setStateChangeCallback((newState: GameState) => {
   }
 });
 
-// --- PERMISSION BUTTON ---
-const createPermissionButton = () => {
-  const btn = document.createElement('button');
-  btn.innerText = "ENABLE TILT CONTROL";
-  Object.assign(btn.style, {
-    position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-    padding: '15px 30px', fontSize: '18px', fontWeight: 'bold',
-    background: '#4488ff', color: 'white', border: 'none', borderRadius: '8px',
-    cursor: 'pointer', zIndex: '2000'
-  });
-
-  btn.onclick = async () => {
-    const granted = await inputManager.requestPermission();
-    if (granted) btn.remove();
-    else {
-      btn.innerText = "PERMISSION DENIED (Tap to retry)";
-      btn.style.background = '#ff4444';
-    }
-  };
-
-  document.body.appendChild(btn);
-  setTimeout(() => {
-    if (inputManager.state.permissionGranted || inputManager.state.usingFallback) {
-      if (btn.parentNode) btn.remove();
-    }
-  }, 1000);
-};
-
-createPermissionButton();
-debugScene.start();
-
 // --- MAIN GAME LOOP ---
 const FIXED_TIMESTEP = 1000 / 60;
 let accumulator = 0;
 let lastTime = performance.now();
+
+debugScene.start(); 
 
 const gameLoop = () => {
   const currentTime = performance.now();
@@ -138,6 +114,7 @@ const gameLoop = () => {
   lastTime = currentTime;
   accumulator += frameTime;
   
+  // 1. Physics (Fixed)
   while (accumulator >= FIXED_TIMESTEP) {
     const gravityVec = gravityController.getGravityVector();
     physicsWorld.update(FIXED_TIMESTEP, gravityVec);
@@ -146,14 +123,18 @@ const gameLoop = () => {
   
   physicsWorld.syncVisuals();
   
+  // 2. Effects (Variable)
+  const dtSeconds = frameTime / 1000;
   const heroMesh = debugScene.getHeroSphere();
-  particleSystem.update(frameTime / 1000, heroMesh.position);
   
+  particleSystem.update(dtSeconds, heroMesh.position);
+  screenShake.update(dtSeconds); // Apply camera shake
+  
+  // 3. Gameplay Logic
   if (gameState.getState() === GameState.PLAYING) {
-    const dtSeconds = frameTime / 1000;
-
     gameState.update(dtSeconds);
     
+    // Check Goals
     const collectedIndex = goalSystem.update(
       dtSeconds,
       heroMesh.position,
@@ -161,13 +142,27 @@ const gameLoop = () => {
     );
     
     if (collectedIndex !== null) {
+      // GOAL COLLECTED EVENT
+      
+      // Spawn effects at Hero/Goal Position
+      particleSystem.createBurst(heroMesh.position);
+      screenShake.shake(0.2, 0.3);
+      soundManager.playGoalCollect();
+      
+      // Calculate Score for Popup
+      const scoreGained = 100 + Math.floor(gameState.getTimeRemaining() * 2);
+      
+      // Show Popup (Now using the fixed getCamera method)
+      gameUI.showScorePopup(scoreGained, heroMesh.position, debugScene.getCamera());
+      
       gameState.onGoalCollected();
     }
     
+    // Sync HUD
     gameUI.updateTimer(gameState.getTimeRemaining());
     gameUI.updateScore(gameState.getScore());
-    const progress = gameState.getProgress();
-    gameUI.updateProgress(progress.collected, progress.required);
+    const p = gameState.getProgress();
+    gameUI.updateProgress(p.collected, p.required);
   }
   
   requestAnimationFrame(gameLoop);

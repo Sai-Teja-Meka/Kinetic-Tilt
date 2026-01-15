@@ -11,6 +11,7 @@ export class GameStateManager {
   
   // Scoring & Progression
   private score: number = 0;
+  private highScore: number = 0; // NEW
   private goalsCollected: number = 0;
   private readonly GOALS_REQUIRED: number = 10;
   
@@ -23,11 +24,30 @@ export class GameStateManager {
   private onStateChange?: (newState: GameState) => void;
 
   constructor() {
+    this.loadHighScore(); // Load on init
     this.reset();
   }
 
   public setStateChangeCallback(callback: (state: GameState) => void): void {
     this.onStateChange = callback;
+  }
+
+  // --- HIGH SCORE LOGIC ---
+  private loadHighScore(): void {
+    const saved = localStorage.getItem('kinetic-tilt-highscore');
+    if (saved) {
+      this.highScore = parseInt(saved, 10);
+      console.log(`📊 High Score Loaded: ${this.highScore}`);
+    }
+  }
+
+  private saveHighScore(): void {
+    localStorage.setItem('kinetic-tilt-highscore', this.highScore.toString());
+    console.log(`💾 High Score Saved: ${this.highScore}`);
+  }
+
+  public getHighScore(): number {
+    return this.highScore;
   }
 
   /**
@@ -93,7 +113,7 @@ export class GameStateManager {
     const totalGoalScore = baseScore + speedBonus;
     this.score += totalGoalScore;
 
-    console.log(`🎯 Goal ${this.goalsCollected}/${this.GOALS_REQUIRED} | +${totalGoalScore} pts`);
+    console.log(`🎯 Goal Collected | +${totalGoalScore} pts`);
 
     // 3. Check Win Condition
     if (this.goalsCollected >= this.GOALS_REQUIRED) {
@@ -105,6 +125,13 @@ export class GameStateManager {
     // Final Time Bonus: Big reward for finishing early
     const timeBonus = Math.floor(this.timeRemaining * this.TIME_BONUS_MULTIPLIER);
     this.score += timeBonus;
+    
+    // CHECK HIGH SCORE
+    if (this.score > this.highScore) {
+      this.highScore = this.score;
+      this.saveHighScore();
+      console.log('🌟 NEW HIGH SCORE!');
+    }
     
     console.log(`🏆 VICTORY! Time Bonus: +${timeBonus} (Total: ${this.score})`);
     this.setState(GameState.WIN);

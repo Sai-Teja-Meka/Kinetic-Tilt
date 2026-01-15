@@ -25,11 +25,12 @@ export class DebugScene {
       antialias: true, 
       alpha: true 
     });
-    // Note: Initial sizing is now handled by setupResizeHandler
+    
+    // Note: Initial sizing handled by setupResizeHandler
 
     // CAMERA
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    this.camera.position.set(0, 15, 15); // Adjusted: Higher up to see walls
+    this.camera.position.set(0, 15, 15); // Higher up to see walls
     this.camera.lookAt(0, 0, 0);
 
     // SCENE & LIGHTS
@@ -42,7 +43,6 @@ export class DebugScene {
 
     // HERO SPHERE
     const geometry = new THREE.SphereGeometry(0.5, 32, 32);
-    // Add texture or wireframe to see rotation later
     const material = new THREE.MeshStandardMaterial({ 
       color: 0x4488ff, metalness: 0.6, roughness: 0.3 
     });
@@ -56,7 +56,7 @@ export class DebugScene {
     );
     this.scene.add(this.gravityArrow);
 
-    // FIX 5: Robust Resize Listener
+    // Setup Resize Listener
     this.setupResizeHandler();
   }
 
@@ -69,22 +69,27 @@ export class DebugScene {
       this.camera.updateProjectionMatrix();
       
       this.renderer.setSize(width, height);
-      // Cap Pixel Ratio to 2 to save battery on high-DPI screens
+      // Cap Pixel Ratio to 2 to save battery
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     };
 
     window.addEventListener('resize', onResize);
-    // Initial call
     onResize();
   }
 
-  // INTERFACE FOR PHYSICS
+  // --- PUBLIC INTERFACE ---
+
   public getHeroSphere(): THREE.Mesh {
     return this.heroSphere;
   }
   
   public getScene(): THREE.Scene {
     return this.scene;
+  }
+
+  // FIX: Added accessor for Camera (Required for ScreenShake/UI)
+  public getCamera(): THREE.Camera {
+    return this.camera;
   }
   
   public start(): void {
@@ -101,7 +106,6 @@ export class DebugScene {
       if (!isNaN(direction.x) && !isNaN(direction.y) && !isNaN(direction.z)) {
         this.gravityArrow.setDirection(direction);
       }
-      // Keep visual arrow attached to hero
       this.gravityArrow.position.copy(this.heroSphere.position); 
 
       const visualLength = Math.max(0.5, (magnitude / 9.8) * 3.0);

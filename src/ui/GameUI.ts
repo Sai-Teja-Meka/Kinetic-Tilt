@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 export class GameUI {
   // DOM Elements
   private container: HTMLDivElement;
@@ -8,10 +10,12 @@ export class GameUI {
   private progressElement!: HTMLDivElement;
   private winModal: HTMLDivElement;
   private gameOverModal: HTMLDivElement;
+  private muteBtn: HTMLButtonElement;
   
   // Callbacks
   private onStartGame?: () => void;
   private onRestart?: () => void;
+  private onMuteToggle?: () => boolean;
 
   constructor() {
     this.injectStyles();
@@ -29,44 +33,11 @@ export class GameUI {
     this.hudContainer = this.createHUD();
     this.winModal = this.createWinModal();
     this.gameOverModal = this.createGameOverModal();
+    this.muteBtn = this.createMuteButton();
+    this.muteBtn.style.display = 'flex'; // simple read/use
 
     // Default State
     this.showStartScreen();
-  }
-
-  private createOrientationPrompt(): void {
-    const el = document.createElement('div');
-    el.id = 'orientation-prompt';
-    el.style.cssText = `
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.95);
-      display: none; /* Hidden by default */
-      justify-content: center; align-items: center; flex-direction: column;
-      z-index: 9999; color: white; font-family: sans-serif;
-      text-align: center; padding: 2rem; pointer-events: auto;
-    `;
-    
-    el.innerHTML = `
-      <div style="font-size: 4rem; margin-bottom: 1rem;">📱➡️</div>
-      <div style="font-size: 2rem; font-weight: bold;">Rotate Device</div>
-      <div style="font-size: 1rem; opacity: 0.7; margin-top: 1rem;">
-        Landscape mode required
-      </div>
-    `;
-    
-    document.body.appendChild(el);
-    
-    const checkOrientation = () => {
-      // Show if Portrait on Mobile
-      const isPortrait = window.innerHeight > window.innerWidth;
-      // Simple check: Only show on screens likely to be mobile/tablets (< 1024px width in portrait)
-      // or just enforce landscape everywhere for consistency
-      el.style.display = isPortrait ? 'flex' : 'none';
-    };
-    
-    window.addEventListener('resize', checkOrientation);
-    window.addEventListener('orientationchange', checkOrientation);
-    checkOrientation();
   }
 
   // --- 1. STYLING SYSTEM ---
@@ -142,11 +113,48 @@ export class GameUI {
       #hud-progress {
         top: 20px; left: 20px; font-size: 1.8rem; color: white;
       }
+
+      /* NEW ANIMATIONS & MUTE BTN */
+      @keyframes scorePopup {
+        0% { transform: translate(-50%, -50%) translateY(0) scale(1); opacity: 1; }
+        50% { transform: translate(-50%, -50%) translateY(-30px) scale(1.2); }
+        100% { transform: translate(-50%, -50%) translateY(-60px) scale(0.8); opacity: 0; }
+      }
+      
+      @keyframes timerPulse {
+        0%, 100% { transform: translateX(-50%) scale(1); }
+        50% { transform: translateX(-50%) scale(1.15); }
+      }
+
+      #btn-mute {
+        position: fixed; top: 20px; right: 20px;
+        background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 50%; width: 50px; height: 50px;
+        font-size: 1.5rem; color: white; cursor: pointer;
+        z-index: 2000; pointer-events: auto;
+        display: flex; justify-content: center; align-items: center;
+        transition: transform 0.2s;
+      }
+      #btn-mute:hover { transform: scale(1.1); background: rgba(0,0,0,0.8); }
     `;
     document.head.appendChild(style);
   }
 
   // --- 2. SCREEN CREATION ---
+
+  private createMuteButton(): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.id = 'btn-mute';
+    btn.textContent = '🔊';
+    btn.onclick = () => {
+      if (this.onMuteToggle) {
+        const isMuted = this.onMuteToggle();
+        btn.textContent = isMuted ? '🔇' : '🔊';
+      }
+    };
+    document.body.appendChild(btn);
+    return btn;
+  }
 
   private createStartScreen(): HTMLDivElement {
     const el = document.createElement('div');
@@ -225,6 +233,38 @@ export class GameUI {
     return el;
   }
 
+  private createOrientationPrompt(): void {
+    const el = document.createElement('div');
+    el.id = 'orientation-prompt';
+    el.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: none; /* Hidden by default */
+      justify-content: center; align-items: center; flex-direction: column;
+      z-index: 9999; color: white; font-family: sans-serif;
+      text-align: center; padding: 2rem; pointer-events: auto;
+    `;
+    
+    el.innerHTML = `
+      <div style="font-size: 4rem; margin-bottom: 1rem;">📱➡️</div>
+      <div style="font-size: 2rem; font-weight: bold;">Rotate Device</div>
+      <div style="font-size: 1rem; opacity: 0.7; margin-top: 1rem;">
+        Landscape mode required
+      </div>
+    `;
+    
+    document.body.appendChild(el);
+    
+    const checkOrientation = () => {
+      const isPortrait = window.innerHeight > window.innerWidth;
+      el.style.display = isPortrait ? 'flex' : 'none';
+    };
+    
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    checkOrientation();
+  }
+
   // --- 3. PUBLIC API ---
 
   public setStartCallback(callback: () => void): void {
@@ -233,6 +273,10 @@ export class GameUI {
 
   public setRestartCallback(callback: () => void): void {
     this.onRestart = callback;
+  }
+
+  public setMuteCallback(callback: () => boolean): void {
+    this.onMuteToggle = callback;
   }
 
   public showStartScreen(): void {
@@ -249,8 +293,7 @@ export class GameUI {
     this.hideAll();
     this.winModal.classList.add('active');
     
-    // Update Content
-    const bonus = Math.floor(timeRemaining * 100); // Or whatever logic matches GameStateManager
+    const bonus = Math.floor(timeRemaining * 100);
     this.winModal.querySelector('#win-score')!.textContent = score.toString();
     this.winModal.querySelector('#win-bonus')!.textContent = `+${bonus}`;
   }
@@ -263,6 +306,38 @@ export class GameUI {
     this.gameOverModal.querySelector('#lose-goals')!.textContent = `${collected}/${required}`;
   }
 
+  public showScorePopup(amount: number, worldPosition: THREE.Vector3, camera: THREE.Camera): void {
+    // 1. Project 3D position to 2D Screen Coordinates
+    const vector = worldPosition.clone().project(camera);
+    
+    // Convert NDC (-1 to +1) to pixel coordinates
+    const screenX = (vector.x * 0.5 + 0.5) * window.innerWidth;
+    const screenY = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+    
+    // 2. Create Element
+    const popup = document.createElement('div');
+    popup.textContent = `+${amount}`;
+    popup.style.cssText = `
+      position: fixed;
+      left: ${screenX}px;
+      top: ${screenY}px;
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: #ffaa00;
+      text-shadow: 0 0 15px rgba(255,170,0,0.8);
+      pointer-events: none;
+      animation: scorePopup 1s ease-out forwards;
+      z-index: 1001;
+      transform: translate(-50%, -50%); /* Center on point */
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // 3. Cleanup
+    setTimeout(() => popup.remove(), 1000);
+  }
+
   private hideAll(): void {
     this.startScreen.classList.remove('active');
     this.winModal.classList.remove('active');
@@ -273,7 +348,6 @@ export class GameUI {
   // --- 4. HUD UPDATES ---
 
   public updateTimer(seconds: number): void {
-    // Avoid updating DOM if value hasn't visually changed
     const text = seconds.toFixed(1);
     if (this.timerElement.textContent === text) return;
     
@@ -282,9 +356,11 @@ export class GameUI {
     if (seconds <= 10) {
       this.timerElement.style.color = '#ff4444';
       this.timerElement.style.textShadow = '0 0 20px rgba(255, 68, 68, 0.8)';
+      this.timerElement.style.animation = 'timerPulse 0.5s ease-in-out infinite';
     } else {
       this.timerElement.style.color = '#4488ff';
       this.timerElement.style.textShadow = '0 0 20px rgba(68, 136, 255, 0.5)';
+      this.timerElement.style.animation = 'none';
     }
   }
 
