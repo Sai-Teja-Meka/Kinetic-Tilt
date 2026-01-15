@@ -1,0 +1,26 @@
+/* FIX 3: Reset & Touch Handling */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: fixed; /* Prevents iOS rubber banding */
+  overscroll-behavior: none;
+  touch-action: none; /* Prevent default touch behaviors */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  background-color: #111;
+}
+
+#canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  touch-action: none;
+}

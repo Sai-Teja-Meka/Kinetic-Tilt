@@ -8,6 +8,7 @@ import { CollisionDetector } from './core/CollisionDetector';
 import { GoalSystem } from './core/GoalSystem';
 import { GameStateManager, GameState } from './core/GameStateManager';
 import { GameUI } from './ui/GameUI';
+import './main.css';
 
 // --- INITIALIZATION ---
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;

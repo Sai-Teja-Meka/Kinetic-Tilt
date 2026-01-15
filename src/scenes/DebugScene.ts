@@ -25,8 +25,7 @@ export class DebugScene {
       antialias: true, 
       alpha: true 
     });
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Note: Initial sizing is now handled by setupResizeHandler
 
     // CAMERA
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -57,7 +56,26 @@ export class DebugScene {
     );
     this.scene.add(this.gravityArrow);
 
-    window.addEventListener('resize', this.handleResize.bind(this));
+    // FIX 5: Robust Resize Listener
+    this.setupResizeHandler();
+  }
+
+  private setupResizeHandler(): void {
+    const onResize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+      
+      this.renderer.setSize(width, height);
+      // Cap Pixel Ratio to 2 to save battery on high-DPI screens
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    };
+
+    window.addEventListener('resize', onResize);
+    // Initial call
+    onResize();
   }
 
   // INTERFACE FOR PHYSICS
@@ -98,10 +116,4 @@ export class DebugScene {
     this.renderer.render(this.scene, this.camera);
     this.animationId = requestAnimationFrame(this.animate);
   };
-
-  private handleResize(): void {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-  }
 }

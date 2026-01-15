@@ -21,6 +21,9 @@ export class GameUI {
     this.container.id = 'game-ui';
     document.body.appendChild(this.container);
 
+    // FIX 4: Orientation Prompt
+    this.createOrientationPrompt();
+
     // Initialize Screens
     this.startScreen = this.createStartScreen();
     this.hudContainer = this.createHUD();
@@ -29,6 +32,41 @@ export class GameUI {
 
     // Default State
     this.showStartScreen();
+  }
+
+  private createOrientationPrompt(): void {
+    const el = document.createElement('div');
+    el.id = 'orientation-prompt';
+    el.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: none; /* Hidden by default */
+      justify-content: center; align-items: center; flex-direction: column;
+      z-index: 9999; color: white; font-family: sans-serif;
+      text-align: center; padding: 2rem; pointer-events: auto;
+    `;
+    
+    el.innerHTML = `
+      <div style="font-size: 4rem; margin-bottom: 1rem;">📱➡️</div>
+      <div style="font-size: 2rem; font-weight: bold;">Rotate Device</div>
+      <div style="font-size: 1rem; opacity: 0.7; margin-top: 1rem;">
+        Landscape mode required
+      </div>
+    `;
+    
+    document.body.appendChild(el);
+    
+    const checkOrientation = () => {
+      // Show if Portrait on Mobile
+      const isPortrait = window.innerHeight > window.innerWidth;
+      // Simple check: Only show on screens likely to be mobile/tablets (< 1024px width in portrait)
+      // or just enforce landscape everywhere for consistency
+      el.style.display = isPortrait ? 'flex' : 'none';
+    };
+    
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    checkOrientation();
   }
 
   // --- 1. STYLING SYSTEM ---
